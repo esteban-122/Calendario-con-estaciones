@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Gregoriano vs. 360 Días con Estaciones</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            background-color: #f4f4f4;
+        }
+        .calendar-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 80%;
+            max-width: 900px;
+            text-align: center;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .calendar-header h2 {
+            margin: 0;
+            color: #333;
+        }
+        .calendar-header select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+        .day-header {
+            font-weight: bold;
+            background-color: #e0e0e0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .day-cell {
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            min-height: 100px; /* Aumentado para acomodar las estaciones */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            text-align: left;
+            background-color: #fff;
+        }
+        .day-cell.empty {
+            background-color: #f9f9f9;
+            border: 1px dashed #eee;
+        }
+        .gregorian-date {
+            font-weight: bold;
+            color: #0056b3;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+        .hypothetical-date {
+            font-size: 0.85em;
+            color: #555;
+            margin-bottom: 5px; /* Espacio antes de las estaciones */
+        }
+        .season-info {
+            font-size: 0.9em;
+            margin-top: auto; /* Empuja las estaciones hacia abajo */
+            width: 100%; /* Asegura que ocupe todo el ancho */
+        }
+        .season-north, .season-south {
+            display: block; /* Cada estación en su propia línea */
+            padding: 2px 0;
+        }
+        .instructions {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="calendar-container">
+        <div class="calendar-header">
+            <select id="monthSelect"></select>
+            <h2 id="currentMonthYear"></h2>
+            <select id="yearSelect"></select>
+        </div>
+        <div class="calendar-grid" id="calendarGrid">
+            <div class="day-header">Dom</div>
+            <div class="day-header">Lun</div>
+            <div class="day-header">Mar</div>
+            <div class="day-header">Mié</div>
+            <div class="day-header">Jue</div>
+            <div class="day-header">Vie</div>
+            <div class="day-header">Sáb</div>
+        </div>
+    </div>
+    <div class="instructions">
+        Selecciona un año y un mes para ver el calendario gregoriano, sus fechas equivalentes en el calendario de 360 días,
+        y las estaciones correspondientes para ambos hemisferios.
+        <br>
+        Las fechas se calculan asumiendo que el "Año 1" de ambos calendarios es el mismo y que el calendario hipotético tiene 12 meses de 30 días.
+    </div>
+
+    <script>
+        const monthNames = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ];
+        const monthDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; // For non-leap year
+
+        const monthSelect = document.getElementById('monthSelect');
+        const yearSelect = document.getElementById('yearSelect');
+        const currentMonthYear = document.getElementById('currentMonthYear');
+        const calendarGrid = document.getElementById('calendarGrid');
+
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth(); // 0-indexed
+
+        // Populate month and year selects
+        monthNames.forEach((month, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = month;
+            monthSelect.appendChild(option);
+        });
+
+        for (let i = 1; i <= 3000; i++) { // Range of years
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            yearSelect.appendChild(option);
+        }
+
+        // Set initial values for selects
+        monthSelect.value = currentMonth;
+        yearSelect.value = currentYear;
+
+        monthSelect.addEventListener('change', (e) => {
+            currentMonth = parseInt(e.target.value);
+            renderCalendar();
+        });
+
+        yearSelect.addEventListener('change', (e) => {
+            currentYear = parseInt(e.target.value);
+            renderCalendar();
+        });
+
+        // --- Helper Functions for Calculations ---
+
+        function isLeapYearGregorian(year) {
+            return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+        }
+
+        function getDaysInMonthGregorian(year, month) {
+            if (month === 1 && isLeapYearGregorian(year)) { // February
+                return 29;
+            }
+            return monthDays[month];
+        }
+
+        function calculateDaysSinceYear1(year, month, day) {
+            let totalDays = 0;
+
+            // Days for full years completed until (year - 1)
+            for (let y = 1; y < year; y++) {
+                totalDays += isLeapYearGregorian(y) ? 366 : 365;
+            }
+
+            // Days for months completed in the current year
+            for (let m = 0; m < month; m++) {
+                totalDays += getDaysInMonthGregorian(year, m);
+            }
+
+            // Days in the current month
+            totalDays += day;
+
+            return totalDays;
+        }
+
+        function convertTo360DayCalendar(gregorianDaysTotal) {
+            const daysInHypotheticalYear = 360;
+            const daysInHypotheticalMonth = 30;
+
+            const hypotheticalYear = Math.floor((gregorianDaysTotal - 1) / daysInHypotheticalYear) + 1;
+            const dayOfYearHypothetical = ((gregorianDaysTotal - 1) % daysInHypotheticalYear) + 1;
+
+            let hypotheticalMonth = 0; // 0-indexed
+            let remainingDays = dayOfYearHypothetical;
+
+            while (remainingDays > daysInHypotheticalMonth) {
+                remainingDays -= daysInHypotheticalMonth;
+                hypotheticalMonth++;
+            }
+            
+            const hypotheticalDay = remainingDays;
+
+            return {
+                year: hypotheticalYear,
+                month: hypotheticalMonth, // 0-indexed
+                day: hypotheticalDay
+            };
+        }
+
+        // --- New Function for Seasons ---
+        function getSeasonEmojis(monthIndex, day) {
+            let seasonNorth = '';
+            let seasonSouth = '';
+
+            // Hemisferio Norte
+            if (monthIndex >= 2 && monthIndex <= 4) { // Marzo (0) a Mayo (4)
+                if (monthIndex === 2 && day < 20) { seasonNorth = '❄️ Invierno'; } // Hasta el 19 de marzo es invierno
+                else { seasonNorth = '🌸 Primavera'; }
+            } else if (monthIndex >= 5 && monthIndex <= 7) { // Junio (5) a Agosto (7)
+                if (monthIndex === 5 && day < 21) { seasonNorth = '🌸 Primavera'; } // Hasta el 20 de junio es primavera
+                else { seasonNorth = '☀️ Verano'; }
+            } else if (monthIndex >= 8 && monthIndex <= 10) { // Septiembre (8) a Noviembre (10)
+                if (monthIndex === 8 && day < 22) { seasonNorth = '☀️ Verano'; } // Hasta el 21 de septiembre es verano
+                else { seasonNorth = '🍂 Otoño'; }
+            } else { // Diciembre (11), Enero (0), Febrero (1)
+                if (monthIndex === 11 && day < 21) { seasonNorth = '🍂 Otoño'; } // Hasta el 20 de diciembre es otoño
+                else { seasonNorth = '❄️ Invierno'; }
+            }
+
+            // Hemisferio Sur (invertido respecto al Norte)
+            if (monthIndex >= 2 && monthIndex <= 4) { // Marzo (0) a Mayo (4)
+                if (monthIndex === 2 && day < 20) { seasonSouth = '☀️ Verano'; } // Hasta el 19 de marzo es verano
+                else { seasonSouth = '🍂 Otoño'; }
+            } else if (monthIndex >= 5 && monthIndex <= 7) { // Junio (5) a Agosto (7)
+                if (monthIndex === 5 && day < 21) { seasonSouth = '🍂 Otoño'; } // Hasta el 20 de junio es otoño
+                else { seasonSouth = '❄️ Invierno'; }
+            } else if (monthIndex >= 8 && monthIndex <= 10) { // Septiembre (8) a Noviembre (10)
+                if (monthIndex === 8 && day < 22) { seasonSouth = '❄️ Invierno'; } // Hasta el 21 de septiembre es invierno
+                else { seasonSouth = '🌸 Primavera'; }
+            } else { // Diciembre (11), Enero (0), Febrero (1)
+                if (monthIndex === 11 && day < 21) { seasonSouth = '🌸 Primavera'; } // Hasta el 20 de diciembre es primavera
+                else { seasonSouth = '☀️ Verano'; }
+            }
+
+            return {
+                north: seasonNorth,
+                south: seasonSouth
+            };
+        }
+
+
+        // --- Calendar Rendering ---
+
+        function renderCalendar() {
+            calendarGrid.innerHTML = `
+                <div class="day-header">Dom</div>
+                <div class="day-header">Lun</div>
+                <div class="day-header">Mar</div>
+                <div class="day-header">Mié</div>
+                <div class="day-header">Jue</div>
+                <div class="day-header">Vie</div>
+                <div class="day-header">Sáb</div>
+            `; // Clear and re-add headers
+
+            currentMonthYear.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 for Sunday, 6 for Saturday
+            const daysInMonth = getDaysInMonthGregorian(currentYear, currentMonth);
+
+            // Add empty cells for the leading days of the week
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.classList.add('day-cell', 'empty');
+                calendarGrid.appendChild(emptyCell);
+            }
+
+            // Add cells for each day of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.classList.add('day-cell');
+
+                const gregorianDateElem = document.createElement('div');
+                gregorianDateElem.classList.add('gregorian-date');
+                gregorianDateElem.textContent = day;
+                dayCell.appendChild(gregorianDateElem);
+
+                // Calculate hypothetical date
+                const totalDaysSinceYear1 = calculateDaysSinceYear1(currentYear, currentMonth, day);
+                const hypotheticalDate = convertTo360DayCalendar(totalDaysSinceYear1);
+
+                const hypotheticalDateElem = document.createElement('div');
+                hypotheticalDateElem.classList.add('hypothetical-date');
+                hypotheticalDateElem.textContent = `${hypotheticalDate.day} ${monthNames[hypotheticalDate.month]} ${hypotheticalDate.year}`;
+                dayCell.appendChild(hypotheticalDateElem);
+
+                // Add season information
+                const seasons = getSeasonEmojis(currentMonth, day);
+                const seasonInfoElem = document.createElement('div');
+                seasonInfoElem.classList.add('season-info');
+                seasonInfoElem.innerHTML = `
+                    <span class="season-north">🌍 ${seasons.north}</span>
+                    <span class="season-south">🇦🇺 ${seasons.south}</span>
+                `;
+                dayCell.appendChild(seasonInfoElem);
+
+                calendarGrid.appendChild(dayCell);
+            }
+        }
+
+        // Initial render
+        renderCalendar();
+    </script>
+</body>
+</html>
